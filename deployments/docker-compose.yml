@@ -1,0 +1,22 @@
+version: "3.0"
+
+networks:
+  needys-api-strategy:
+
+services:
+  needys-api-strategy:
+    container_name: needys-api-strategy
+    build:
+      context: ../
+      dockerfile: build/package/Dockerfile.development
+    ports:
+      - 8011:8011
+    volumes:
+      - ./../:/application
+    networks:
+      - needys-api-strategy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8011/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
