@@ -1,99 +1,90 @@
 package main
 
-import(
-  config  "github.com/gpenaud/needys-api-strategy/internal/config"
-  context "context"
-  core    "github.com/gpenaud/needys-api-strategy/internal/core"
-  cmdline "github.com/galdor/go-cmdline"
-  fmt     "fmt"
-  http    "net/http"
-  log     "github.com/gpenaud/needys-api-strategy/pkg/log"
-  mux     "github.com/gorilla/mux"
-  os      "os"
-  signal  "os/signal"
-  syscall "syscall"
-  time    "time"
-  version "github.com/gpenaud/needys-api-strategy/build/version"
+import (
+  cmdline  "github.com/galdor/go-cmdline"
+  context  "context"
+  internal "github.com/gpenaud/needys-api-strategy/internal"
+  log      "github.com/sirupsen/logrus"
+  os       "os"
+  signal   "os/signal"
+  syscall  "syscall"
 )
 
-func health(w http.ResponseWriter, _ *http.Request) {
-  w.WriteHeader(http.StatusOK)
-  w.Header().Set("Content-Type", "application/json")
-  w.Write([]byte("{\"state\": \"healthy\"}"))
-}
-
-func ready(w http.ResponseWriter, _ *http.Request) {
-  w.WriteHeader(http.StatusOK)
-  w.Header().Set("Content-Type", "application/json")
-  w.Write([]byte("{\"state\": \"ready\"}"))
-}
-
-func main() {
+func registerCliConfiguration(a *internal.Application) {
   cmdline := cmdline.New()
 
+  a.Config = &internal.Configuration{}
+
+  // application configuration flags
+  cmdline.AddOption("e", "environment", "ENVIRONMENT", "the current environment (development, integration, production)")
+  cmdline.SetOptionDefault("environment", "production")
+
+  cmdline.AddOption("v", "verbosity", "LEVEL", "verbosity for log-level (error, warning, info, debug)")
+  cmdline.SetOptionDefault("verbosity", "info")
+
+  cmdline.AddOption("l", "log-format", "FORMAT", "log format (text, json)")
+  cmdline.SetOptionDefault("log-format", "unset")
+
+  cmdline.AddFlag("", "log-healthcheck", "log healthcheck queries")
+
+  // application server configuration flags
   cmdline.AddOption("", "server.host", "HOST", "host of application")
   cmdline.SetOptionDefault("server.host", "localhost")
+
   cmdline.AddOption("", "server.port", "PORT", "port of application")
   cmdline.SetOptionDefault("server.port", "8011")
 
-  cmdline.AddFlag("v", "verbose", "log more information")
   cmdline.Parse(os.Args)
 
-  config.HttpServer.Host = cmdline.OptionValue("server.host")
-  config.HttpServer.Port = cmdline.OptionValue("server.port")
+  // application general configuration
+  a.Config.Environment    = cmdline.OptionValue("environment")
+  a.Config.Verbosity      = cmdline.OptionValue("verbosity")
+  a.Config.LogFormat      = cmdline.OptionValue("log-format")
+  a.Config.LogHealthcheck = cmdline.IsOptionSet("log-healthcheck")
 
-  // mocked data
-  core.Strategies = append(core.Strategies,
-    core.Strategy{ID: "1", Description: "Aller me promener dans la nature", NeedID: "3"},
-    core.Strategy{ID: "2", Description: "Faire une séance de cohérence cardiaque", NeedID: "3"},
-    core.Strategy{ID: "3", Description: "Une bonne b...", NeedID: "3"},
-  )
+  // a server configuration values
+  a.Config.Server.Host = cmdline.OptionValue("server.host")
+  a.Config.Server.Port = cmdline.OptionValue("server.port")
+}
 
-  router := mux.NewRouter()
+var BuildTime = "unset"
+var Commit 		= "unset"
+var Release 	= "unset"
 
-  // probes
-  router.HandleFunc("/health", health).Methods("GET")
-  router.HandleFunc("/ready", ready).Methods("GET")
+func registerVersion(a *internal.Application) {
+  a.Version = &internal.Version{BuildTime, Commit, Release}
+}
 
-  // logic
-  router.HandleFunc("/strategy", core.GetStrategies).Methods("GET")
-  router.HandleFunc("/strategy", core.CreateStrategy).Methods("POST")
+var mainLog *log.Entry
+var a        internal.Application
 
-  interrupt := make(chan os.Signal, 1)
-  signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
+func init() {
+  mainLog = log.WithFields(log.Fields{
+    "_file": "cmd/needys-api-strategy-server/main.go",
+    "_type": "system",
+  })
 
-  fmt.Printf(
-    "Starting needys-api-strategy on %s:%s...\n > build time: %s\n > release: %s\n > commit: %s\n",
-    config.HttpServer.Host,
-    config.HttpServer.Port,
-    version.BuildTime,
-    version.Release,
-    version.Commit,
-  )
+  registerCliConfiguration(&a)
+  registerVersion(&a)
 
-  server_address := fmt.Sprintf("%s:%s", config.HttpServer.Host, config.HttpServer.Port)
-  server := &http.Server{
-    Addr:           server_address,
-    Handler:        router,
-    ReadTimeout:    10 * time.Second,
-    WriteTimeout:   10 * time.Second,
-    MaxHeaderBytes: 1 << 20,
-  }
+  a.Initialize()
+}
+
+func main() {
+  c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
+	ctx, cancel := context.WithCancel(context.Background())
 
   go func() {
-    log.ErrorLogger.Fatalln(server.ListenAndServe())
-  }()
+		oscall := <-c
 
-  killSignal := <-interrupt
+    mainLog.WithFields(log.Fields{
+      "signal": oscall,
+    }).Warn("received a system call")
 
-  switch killSignal {
-  case os.Interrupt:
-    log.WarningLogger.Println("Received SIGINT...")
-  case syscall.SIGTERM:
-    log.WarningLogger.Println("Received SIGTERM...")
-  }
+		cancel()
+	}()
 
-  log.InfoLogger.Println("The service is shutting down...")
-  server.Shutdown(context.Background())
-  log.InfoLogger.Println("...Shutting done !")
+  a.Run(ctx)
 }

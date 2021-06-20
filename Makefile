@@ -35,7 +35,7 @@ help:
 
 ## stack - start the entire stack in background, then follow logs
 start:
-	docker-compose ${DOCKER_COMPOSE_OPTIONS} up  --build --detach
+	docker-compose ${DOCKER_COMPOSE_OPTIONS} up --build --detach
 	docker-compose ${DOCKER_COMPOSE_OPTIONS} logs --follow needys-api-strategy
 
 ## stack - stop the entire stack
@@ -46,6 +46,20 @@ stop:
 watch:
 	watch docker-compose ${DOCKER_COMPOSE_OPTIONS} ps
 
+## stack - log the entire stack
+logs:
+	docker-compose ${DOCKER_COMPOSE_OPTIONS} logs --follow
+
+.PHONY: test
+test:
+	/bin/sh scripts/test-api.sh --query
+
+test-unit:
+	@echo "Stricts unit-tests are not yet implemented !"
+
+test-behavior:
+	go test -v ./... --godog.format=pretty --godog.random -race -covermode=atomic
+
 ## docker - build the needys-api-strategy image
 .PHONY: build
 build:
@@ -54,14 +68,3 @@ build:
 ## docker - enter into the needys-api-strategy container
 enter:
 	docker-compose ${DOCKER_COMPOSE_OPTIONS} exec needys-api-strategy /bin/sh
-
-## test - display all "need" table entries
-test-list:
-	curl -i -X GET http://localhost:8011/strategy
-
-test-create:
-	curl -i \
-		-H "Content-Type: application/json" \
-		-d '{"description":"dormir", "needId":"3"}' \
-		-X POST \
-	http://localhost:8011/strategy

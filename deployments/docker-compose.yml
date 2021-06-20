@@ -1,4 +1,4 @@
-version: "3.0"
+version: "3"
 
 networks:
   needys-api-strategy:
@@ -9,6 +9,12 @@ services:
     build:
       context: ../
       dockerfile: build/package/Dockerfile.development
+    environment:
+      ENVIRONMENT: ${NEEDYS_API_STRATEGY_ENVIRONMENT:-development}
+      VERBOSITY: ${NEEDYS_API_STRATEGY_VERBOSITY:-debug}
+      LOG_FORMAT: ${NEEDYS_API_STRATEGY_LOG_FORMAT:-text}
+      LOG_HEALTHCHECK: ${NEEDYS_API_STRATEGY_LOG_FORMAT:-false}
+      OPTIONAL_FLAGS: ${NEEDYS_API_STRATEGY_OPTIONAL_FLAGS:-}
     ports:
       - 8011:8011
     volumes:
@@ -16,7 +22,7 @@ services:
     networks:
       - needys-api-strategy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8011/ready"]
-      interval: 5s
+      test: curl --fail http://localhost:8011/ready || exit 1
+      interval: 3s
       timeout: 3s
-      retries: 20
+      retries: 10

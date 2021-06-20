@@ -7,14 +7,14 @@ tmp_dir = "/tmp"
 
 [build]
 # Just plain old shell command. You could use `make` as well.
-cmd = "go build -ldflags \"-s -w -X github.com/gpenaud/needys-api-strategy/version.Release=development -X github.com/gpenaud/needys-api-strategy/version.Commit=000000 -X github.com/gpenaud/needys-api-strategy/version.BuildTime=0001-01-01_00:00:01 \" -o ./needys-api-strategy ./cmd/needys-api-strategy-server/main.go"
+cmd = "go build -ldflags \"-s -w -X main.Release=development -X main.Commit=000000 -X main.BuildTime=0001-01-01_00:00:01 \" -o ./needys-api-strategy ./cmd/needys-api-strategy-server/main.go"
 
 # Binary file yields from `cmd`.
 bin = "tmp/app"
 
 # Customize binary.
 # This is how you start to run your application. Since my application will works like CLI, so to run it, like to make a CLI call.
-full_bin = "./needys-api-strategy --server.host 0.0.0.0"
+full_bin = "./needys-api-strategy --server.host 0.0.0.0 --environment ${ENVIRONMENT} --verbosity ${VERBOSITY} --log-format ${LOG_FORMAT} ${OPTIONAL_FLAGS:-}"
 
 # This log file places in your tmp_dir.
 log = "air_errors.log"

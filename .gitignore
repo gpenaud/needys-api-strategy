@@ -1,5 +1,5 @@
 # testing
 *.test
-*.tmp
+tmp
 logs.txt
 needys-api-strategy
